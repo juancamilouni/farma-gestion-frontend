@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Swal from "sweetalert2";
 import api from "../config/api";
 
 export default function Comprobantes() {
@@ -22,8 +23,83 @@ export default function Comprobantes() {
     fetchComprobantes();
   }, []);
 
-  if (loading) return <p className="p-6 text-gray-500">Cargando comprobantes...</p>;
+  if (loading)
+    return <p className="p-6 text-gray-500">Cargando comprobantes...</p>;
   if (error) return <p className="p-6 text-red-500">{error}</p>;
+
+  // 🔹 Función: marcar entregado
+  async function marcarEntregado(id) {
+    const result = await Swal.fire({
+      title: "¿Marcar como entregado?",
+      text: "El comprobante se actualizará como entregado.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, confirmar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#08988e",
+      cancelButtonColor: "#d33",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await api.put(`/comprobantes/entregar/${id}`);
+      setComprobantes((prev) =>
+        prev.map((c) =>
+          c.id_comprobante === id ? { ...c, estado: "entregado" } : c
+        )
+      );
+
+      Swal.fire({
+        icon: "success",
+        title: "Comprobante actualizado",
+        text: "Se marcó como entregado correctamente.",
+        confirmButtonColor: "#08988e",
+      });
+    } catch (err) {
+      console.error("Error al marcar entregado:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudo marcar el comprobante como entregado.",
+      });
+    }
+  }
+
+  // 🔹 Función: eliminar comprobante
+  async function eliminarComprobante(id) {
+    const result = await Swal.fire({
+      title: "¿Eliminar comprobante?",
+      text: "Esta acción no se puede deshacer.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#6b7280",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await api.delete(`/comprobantes/${id}`);
+      setComprobantes((prev) => prev.filter((c) => c.id_comprobante !== id));
+
+      Swal.fire({
+        icon: "success",
+        title: "Eliminado",
+        text: "El comprobante fue eliminado correctamente.",
+        confirmButtonColor: "#08988e",
+      });
+    } catch (err) {
+      console.error("Error al eliminar comprobante:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudo eliminar el comprobante.",
+      });
+    }
+  }
 
   return (
     <div className="p-6">
@@ -93,31 +169,4 @@ export default function Comprobantes() {
       )}
     </div>
   );
-
-  // 🔹 Funciones auxiliares
-  async function marcarEntregado(id) {
-    if (!confirm("¿Marcar este comprobante como entregado?")) return;
-    try {
-      await api.put(`/comprobantes/entregar/${id}`);
-      setComprobantes((prev) =>
-        prev.map((c) =>
-          c.id_comprobante === id ? { ...c, estado: "entregado" } : c
-        )
-      );
-    } catch (err) {
-      console.error("Error al marcar entregado:", err);
-      alert("No se pudo marcar el comprobante como entregado.");
-    }
-  }
-
-  async function eliminarComprobante(id) {
-    if (!confirm("¿Seguro que deseas eliminar este comprobante?")) return;
-    try {
-      await api.delete(`/comprobantes/${id}`);
-      setComprobantes((prev) => prev.filter((c) => c.id_comprobante !== id));
-    } catch (err) {
-      console.error("Error al eliminar comprobante:", err);
-      alert("No se pudo eliminar el comprobante.");
-    }
-  }
 }
