@@ -1,8 +1,6 @@
-import React from "react";
-import { FaHistory } from "react-icons/fa";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  FaClinicMedical,
   FaHome,
   FaUserInjured,
   FaPills,
@@ -10,60 +8,115 @@ import {
   FaChartLine,
   FaBoxes,
   FaUsers,
+  FaClinicMedical,
+  FaChevronDown,
+  FaChevronRight,
 } from "react-icons/fa";
 
 const Sidebar = () => {
+  const [expanded, setExpanded] = useState({
+    dashboard: true,
+    pacientes: false,
+    medicamentos: false,
+    ordenes: false,
+    reportes: false,
+    inventarios: false,
+  });
+
+  const toggleExpand = (key) => {
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const menuItems = [
-    { icon: <FaHome />, label: "Dashboard", path: "/dashboard" },
-    { icon: <FaUserInjured />, label: "Pacientes", path: "/pacientes" },
-    { icon: <FaPills />, label: "Items", path: "/items" },
-    { icon: <FaFileMedical />, label: "Órdenes", path: "/ordenes" },
-    { icon: <FaChartLine />, label: "Reportes", path: "/reportes" },
-    { icon: <FaBoxes />, label: "Inventarios", path: "/inventarios" },
-    { icon: <FaUsers />, label: "Usuarios", path: "/usuarios" },
-    { icon: <FaUsers />, label: "Proveedores", path: "/proveedores" },
-    { icon: <FaHome />, label: "Ubicaciones", path: "/ubicaciones" },
-    { icon: <FaHistory />, label: "Auditoría", path: "/auditoria" },
-    { icon: <FaFileMedical />, label: "Comprobantes", path: "/comprobantes" },
+    { label: "Dashboard", icon: <FaHome />, path: "/dashboard" },
+    { label: "Pacientes", icon: <FaUserInjured />, path: "/pacientes" },
+    { label: "Medicamentos", icon: <FaPills />, path: "/items" },
+    { label: "Órdenes", icon: <FaFileMedical />, path: "/ordenes" },
+    { label: "Reportes", icon: <FaChartLine />, path: "/reportes" },
+    { label: "Inventarios", icon: <FaBoxes />, path: "/inventarios" },
+    { label: "Usuarios", icon: <FaUsers />, path: "/usuarios" },
+    { label: "Proveedores", icon: <FaUsers />, path: "/proveedores" },
   ];
 
   return (
-    <aside
-      className="w-64 bg-[#08988e] flex flex-col p-6 h-screen shadow-lg"
-      style={{ color: "#ffffff" }} // ✅ color blanco forzado para todo el sidebar
-    >
-      {/* Logo y nombre */}
-      <h2
-        className="text-2xl font-semibold mb-10 flex items-center gap-2"
-        style={{ color: "#ffffff" }}
-      >
-        <FaClinicMedical className="text-2xl" style={{ color: "#ffffff" }} />
-        <span>FarmaGestión</span>
-      </h2>
+    <aside className="w-64 bg-white border-r border-gray-200 p-4 flex flex-col shadow-sm transition-all duration-300">
+      {/* Logo */}
+      <div className="flex items-center gap-2 mb-8">
+        <div className="w-9 h-9 bg-[#08988e] rounded-lg flex items-center justify-center text-white text-xl">
+          <FaClinicMedical />
+        </div>
+        <span className="font-bold text-lg text-gray-900">FarmaGestión</span>
+      </div>
 
-      {/* Menú lateral */}
-      <ul className="space-y-2 list-none m-0 p-0">
+      {/* Menú */}
+      <nav className="flex-1 space-y-2">
+        <div className="text-xs font-semibold text-gray-500 px-3 mb-3">
+          PANEL PRINCIPAL
+        </div>
+
         {menuItems.map((item) => (
-          <li key={item.label}>
+          <div key={item.label}>
             <NavLink
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 
-                ${isActive ? "bg-[#067d76]" : "hover:bg-[#078b83]"}`
+                `flex items-center justify-between px-4 py-3 rounded-lg transition-colors
+                ${
+                  isActive
+                    ? "bg-[#08988e] text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`
               }
-              style={{ color: "#ffffff" }} // ✅ texto blanco fijo
             >
-              <span className="text-lg" style={{ color: "#ffffff" }}>
-                {item.icon}
-              </span>
-              <span style={{ color: "#ffffff" }}>{item.label}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-lg">{item.icon}</span>
+                <span className="font-medium">{item.label}</span>
+              </div>
             </NavLink>
-          </li>
+          </div>
         ))}
-      </ul>
 
-      {/* Footer opcional */}
+        {/* Ejemplo con submenú (puedes ampliar si quieres) */}
+        <div className="mt-6">
+          <button
+            onClick={() => toggleExpand("reportes")}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <FaChartLine className="text-lg" />
+              <span className="font-medium">Módulos Avanzados</span>
+            </div>
+            {expanded.reportes ? <FaChevronDown /> : <FaChevronRight />}
+          </button>
 
+          {expanded.reportes && (
+            <div className="ml-10 mt-2 space-y-2 text-sm">
+              <NavLink
+                to="/auditoria"
+                className="block text-gray-600 hover:text-[#08988e]"
+              >
+                Auditoría
+              </NavLink>
+              <NavLink
+                to="/comprobantes"
+                className="block text-gray-600 hover:text-[#08988e]"
+              >
+                Comprobantes
+              </NavLink>
+              <NavLink
+                to="/ubicaciones"
+                className="block text-gray-600 hover:text-[#08988e]"
+              >
+                Ubicaciones
+              </NavLink>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* Footer */}
+      <div className="border-t border-gray-200 pt-4 mt-6 text-center">
+        <p className="text-xs text-gray-500">© 2025 FarmaGestión</p>
+      </div>
     </aside>
   );
 };
