@@ -6,10 +6,24 @@ import api from "../config/api"
 export default function Inventarios() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [sortBy, setSortBy] = useState("nombre")
-  const [filterTipo, setFilterTipo] = useState("todos")
+  const [error, setError] = useState(null)
 
+  // FILTROS / BUSCADOR
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filtroTipo, setFiltroTipo] = useState("TODOS")          // MEDICAMENTO / INSUMO / EQUIPO / TODOS
+  const [filtroUbicacion, setFiltroUbicacion] = useState("TODAS")
+
+  // ORDENAMIENTO
+  const [sortConfig, setSortConfig] = useState({
+    key: "descripcion",
+    direction: "asc",
+  })
+
+  // PAGINACIÓN
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  // MODAL CREAR ITEM
   const [showModal, setShowModal] = useState(false)
   const [newItem, setNewItem] = useState({
     id_ubicacion: "",
@@ -20,9 +34,51 @@ export default function Inventarios() {
     stock_minimo: 0,
   })
 
+  // MODAL EDITAR ITEM
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editItem, setEditItem] = useState(null)
+
+  // -----------------------------------
+  // API – CARGA DE ITEMS
+  // -----------------------------------
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await api.get("/items/")
+        setItems(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error("Error al obtener items:", err)
+        setError("No se pudieron cargar los items.")
+        setItems([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchItems()
+  }, [])
+
+  // -----------------------------------
+  // HANDLERS MODALES
+  // -----------------------------------
   const openModal = () => setShowModal(true)
   const closeModal = () => setShowModal(false)
 
+  const openEditModal = (item) => {
+    setEditItem({ ...item })
+    setShowEditModal(true)
+  }
+
+  const closeEditModal = () => {
+    setEditItem(null)
+    setShowEditModal(false)
+  }
+
+  // -----------------------------------
+  // FORMULARIOS
+  // -----------------------------------
   const handleChange = (e) => {
     setNewItem({
       ...newItem,
@@ -30,6 +86,14 @@ export default function Inventarios() {
     })
   }
 
+  const handleEditChange = (e) => {
+    setEditItem({
+      ...editItem,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+  // CREAR ITEM
   const submitNewItem = async () => {
     try {
       await api.post("/items/", newItem)
@@ -37,51 +101,157 @@ export default function Inventarios() {
       window.location.reload()
     } catch (err) {
       console.error("Error creando item:", err)
+      alert("Error creando item")
     }
   }
 
-  useEffect(() => {
-    setLoading(true)
-    api
-      .get("/items/")
-      .then((data) => {
-        setItems(data || [])
-        setLoading(false)
+  // ACTUALIZAR ITEM COMPLETO (PUT /items/update-full/{id})
+  const submitUpdateItem = async () => {
+    try {
+      await api.put(`/items/update-full/${editItem.id_item}`, {
+        id_ubicacion: Number(editItem.id_ubicacion),
+        codigo: editItem.codigo,
+        descripcion: editItem.descripcion,
+        tipo_item: editItem.tipo_item,
+        unidad_medida: editItem.unidad_medida,
+        stock_minimo: Number(editItem.stock_minimo),
       })
-      .catch((err) => {
-        console.error("Error al obtener items:", err)
-        setLoading(false)
-      })
-  }, [])
 
+      closeEditModal()
+      window.location.reload()
+    } catch (error) {
+      console.error("Error actualizando item:", error)
+      alert("Error actualizando item")
+    }
+  }
+
+  // -----------------------------------
+  // OPCIONES DE FILTROS (tipo / ubicación)
+  // -----------------------------------
+  const opcionesTipo = useMemo(() => {
+    const tipos = [...new Set(items.map((i) => i.tipo_item).filter(Boolean))]
+    return tipos.sort()
+  }, [items])
+
+  const opcionesUbicacion = useMemo(() => {
+    const ubicaciones = [...new Set(items.map((i) => i.id_ubicacion).filter(Boolean))]
+    return ubicaciones.sort((a, b) => Number(a) - Number(b))
+  }, [items])
+
+  // -----------------------------------
+  // FILTRADO + ORDEN + PAGINACIÓN
+  // -----------------------------------
   const filteredData = useMemo(() => {
-    const result = items.filter((item) => {
-      const matchesSearch =
-        item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
+    let result = [...items]
 
-      const matchesTipo = filterTipo === "todos" || item.tipo_item === filterTipo
+    // BÚSQUEDA
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      result = result.filter((item) => {
+        return (
+          item.descripcion?.toLowerCase().includes(searchLower) ||
+          item.codigo?.toLowerCase().includes(searchLower) ||
+          item.id_item?.toString().includes(searchLower)
+        )
+      })
+    }
 
-      return matchesSearch && matchesTipo
-    })
+    // FILTRO TIPO
+    if (filtroTipo !== "TODOS") {
+      result = result.filter((item) => item.tipo_item === filtroTipo)
+    }
 
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case "nombre":
-          return a.descripcion.localeCompare(b.descripcion)
-        case "codigo":
-          return a.codigo.localeCompare(b.codigo)
-        default:
-          return 0
-      }
-    })
+    // FILTRO UBICACIÓN
+    if (filtroUbicacion !== "TODAS") {
+      result = result.filter(
+        (item) => String(item.id_ubicacion) === String(filtroUbicacion),
+      )
+    }
+
+    // ORDENAMIENTO
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aValue = a[sortConfig.key]
+        let bValue = b[sortConfig.key]
+
+        if (aValue === undefined || aValue === null) aValue = ""
+        if (bValue === undefined || bValue === null) bValue = ""
+
+        if (typeof aValue === "string") aValue = aValue.toLowerCase()
+        if (typeof bValue === "string") bValue = bValue.toLowerCase()
+
+        if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1
+        if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1
+        return 0
+      })
+    }
 
     return result
-  }, [items, searchTerm, sortBy, filterTipo])
+  }, [items, searchTerm, filtroTipo, filtroUbicacion, sortConfig])
 
-  const totalItems = items.length
-  const totalStockMinimo = items.reduce((sum, item) => sum + (item.stock_minimo || 0), 0)
+  const totalItemsFiltrados = filteredData.length
+  const totalPages = Math.ceil(totalItemsFiltrados / itemsPerPage) || 1
 
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentItems = filteredData.slice(startIndex, endIndex)
+
+  // Cuando cambia búsqueda o filtros → volver a página 1
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filtroTipo, filtroUbicacion, itemsPerPage])
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        }
+      }
+      return {
+        key,
+        direction: "asc",
+      }
+    })
+  }
+
+  const limpiarFiltros = () => {
+    setSearchTerm("")
+    setFiltroTipo("TODOS")
+    setFiltroUbicacion("TODAS")
+    setSortConfig({ key: "descripcion", direction: "asc" })
+  }
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
+  }
+
+  const getPageNumbers = () => {
+    const pages = []
+    const maxVisible = 5
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, "...", totalPages)
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
+      } else {
+        pages.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages)
+      }
+    }
+    return pages
+  }
+
+  // -----------------------------------
+  // ICONOS
+  // -----------------------------------
   const getTypeIcon = (tipo) => {
     const icons = {
       MEDICAMENTO: "💊",
@@ -100,21 +270,59 @@ export default function Inventarios() {
     return styles[tipo] || "bg-gray-100 text-gray-800"
   }
 
+  // -----------------------------------
+  // ESTADOS DE CARGA / ERROR
+  // -----------------------------------
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#08988e] mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando inventario...</p>
+          <div className="inline-block w-12 h-12 border-4 border-[#08988e] border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-600">Cargando inventario...</p>
         </div>
       </div>
     )
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-md border border-red-200 p-8 max-w-md">
+          <div className="text-center">
+            <svg
+              className="w-16 h-16 mx-auto text-red-500 mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Error de conexión</h2>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#08988e] text-white rounded-lg hover:bg-[#067268] transition"
+            >
+              Reintentar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // -----------------------------------
+  // RENDER PRINCIPAL
+  // -----------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-1">
-      {/* CONTENEDOR BLANCO - MANTENER IGUAL */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 md:p-10">
+        {/* HEADER */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gray-900">Gestión de Inventarios</h1>
@@ -131,61 +339,497 @@ export default function Inventarios() {
           </button>
         </div>
 
+        {/* BARRA DE BÚSQUEDA + FILTROS (estilo Auditoría) */}
+        <div className="mb-6 space-y-4">
+          {/* BUSCADOR */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Buscar por código, descripción o ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#08988e] bg-white"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* FILTROS */}
+          <div className="flex flex-wrap gap-3">
+            {/* FILTRO TIPO */}
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#08988e] bg-white text-sm"
+            >
+              <option value="TODOS">Todos los tipos</option>
+              {opcionesTipo.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
+            </select>
+
+            {/* FILTRO UBICACIÓN */}
+            <select
+              value={filtroUbicacion}
+              onChange={(e) => setFiltroUbicacion(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#08988e] bg-white text-sm"
+            >
+              <option value="TODAS">Todas las ubicaciones</option>
+              {opcionesUbicacion.map((ubi) => (
+                <option key={ubi} value={ubi}>
+                  {ubi}
+                </option>
+              ))}
+            </select>
+
+            {/* LIMPIAR FILTROS */}
+            {(searchTerm || filtroTipo !== "TODOS" || filtroUbicacion !== "TODAS") && (
+              <button
+                onClick={limpiarFiltros}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm flex items-center gap-1"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* INFO + ITEMS POR PÁGINA */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div className="text-sm text-gray-600">
+            Mostrando{" "}
+            <span className="font-semibold text-[#08988e]">
+              {totalItemsFiltrados === 0 ? 0 : startIndex + 1}
+            </span>{" "}
+            a{" "}
+            <span className="font-semibold text-[#08988e]">
+              {Math.min(endIndex, totalItemsFiltrados)}
+            </span>{" "}
+            de{" "}
+            <span className="font-semibold text-[#08988e]">
+              {totalItemsFiltrados}
+            </span>{" "}
+            lotes
+            {totalItemsFiltrados !== items.length && (
+              <span className="text-gray-500">
+                {" "}
+                (filtrado de {items.length} total)
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="itemsPerPage" className="text-sm text-gray-600">
+              Mostrar:
+            </label>
+            <select
+              id="itemsPerPage"
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#08988e] bg-white"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span className="text-sm text-gray-600">por página</span>
+          </div>
+        </div>
+
+        {/* TABLA */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            {totalItemsFiltrados === 0 ? (
+              <div className="p-8 text-center">
+                <svg
+                  className="w-16 h-16 mx-auto text-gray-400 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p className="text-gray-600 text-lg">
+                  {items.length === 0
+                    ? "No hay lotes registrados."
+                    : "No se encontraron lotes con los filtros aplicados."}
+                </p>
+                {items.length > 0 && (
+                  <button
+                    onClick={limpiarFiltros}
+                    className="mt-4 px-4 py-2 bg-[#08988e] text-white rounded-lg hover:bg-[#067268] transition"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gradient-to-r from-[#08988e] to-[#067a6f] text-white text-sm uppercase">
+                    <th
+                      className="px-6 py-4 text-left cursor-pointer hover:bg-[#067268] transition"
+                      onClick={() => handleSort("id_item")}
+                    >
+                      <div className="flex items-center gap-2">
+                        ID
+                        {sortConfig.key === "id_item" && (
+                          <svg
+                            className={`w-4 h-4 transition-transform ${
+                              sortConfig.direction === "desc"
+                                ? "rotate-180"
+                                : ""
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 15l7-7 7 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      className="px-6 py-4 text-left cursor-pointer hover:bg-[#067268] transition"
+                      onClick={() => handleSort("codigo")}
+                    >
+                      <div className="flex items-center gap-2">
+                        Código
+                        {sortConfig.key === "codigo" && (
+                          <svg
+                            className={`w-4 h-4 transition-transform ${
+                              sortConfig.direction === "desc"
+                                ? "rotate-180"
+                                : ""
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 15l7-7 7 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      className="px-6 py-4 text-left cursor-pointer hover:bg-[#067268] transition"
+                      onClick={() => handleSort("descripcion")}
+                    >
+                      <div className="flex items-center gap-2">
+                        Descripción
+                        {sortConfig.key === "descripcion" && (
+                          <svg
+                            className={`w-4 h-4 transition-transform ${
+                              sortConfig.direction === "desc"
+                                ? "rotate-180"
+                                : ""
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 15l7-7 7 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </th>
+
+                    <th className="px-6 py-4 text-left">Tipo</th>
+                    <th className="px-6 py-4 text-left">U. Medida</th>
+                    <th className="px-6 py-4 text-left">Stock Mínimo</th>
+                    <th className="px-6 py-4 text-left">Ubicación</th>
+                    <th className="px-6 py-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200 text-sm">
+                  {currentItems.map((item, idx) => (
+                    <tr
+                      key={item.id_item}
+                      className={`hover:bg-gray-50 transition ${
+                        idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"
+                      }`}
+                    >
+                      <td className="px-6 py-4 font-medium text-gray-700">
+                        #{item.id_item}
+                      </td>
+                      <td className="px-6 py-4 font-mono bg-gray-50">
+                        {item.codigo}
+                      </td>
+                      <td className="px-6 py-4">{item.descripcion}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`${getTypeBadge(
+                            item.tipo_item,
+                          )} px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 w-fit`}
+                        >
+                          {getTypeIcon(item.tipo_item)} {item.tipo_item}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">{item.unidad_medida}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-semibold">
+                          {item.stock_minimo}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {item.id_ubicacion ?? "Sin ubicación"}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-medium"
+                        >
+                          Editar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* PAGINACIÓN ESTILO AUDITORÍA */}
+        {totalItemsFiltrados > 0 && totalPages > 1 && (
+          <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-gray-600">
+              Página{" "}
+              <span className="font-semibold text-[#08988e]">
+                {currentPage}
+              </span>{" "}
+              de{" "}
+              <span className="font-semibold text-[#08988e]">
+                {totalPages}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => goToPage(1)}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  currentPage === 1
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-[#08988e] hover:text-white hover:border-[#08988e]"
+                }`}
+                title="Primera página"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                  />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  currentPage === 1
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-[#08988e] hover:text-white hover:border-[#08988e]"
+                }`}
+              >
+                Anterior
+              </button>
+
+              <div className="hidden sm:flex items-center gap-1">
+                {getPageNumbers().map((page, idx) =>
+                  page === "..." ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-3 py-2 text-gray-500"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => goToPage(page)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                        currentPage === page
+                          ? "bg-[#08988e] text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  currentPage === totalPages
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-[#08988e] hover:text-white hover:border-[#08988e]"
+                }`}
+              >
+                Siguiente
+              </button>
+
+              <button
+                onClick={() => goToPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  currentPage === totalPages
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-[#08988e] hover:text-white hover:border-[#08988e]"
+                }`}
+                title="Última página"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CREAR ITEM */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Crear Nuevo Lote</h2>
+              <h2 className="text-2xl font-bold mb-6 text-gray-900">
+                Crear Nuevo Lote
+              </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 <input
                   name="codigo"
-                  placeholder="Código del lote"
                   value={newItem.codigo}
-                  className="col-span-1 md:col-span-1 border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
+                  placeholder="Código"
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
                 />
-
                 <input
                   name="descripcion"
-                  placeholder="Descripción del producto"
                   value={newItem.descripcion}
-                  className="col-span-1 md:col-span-1 border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
+                  placeholder="Descripción"
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
                 />
-
                 <select
                   name="tipo_item"
                   value={newItem.tipo_item}
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
-                  className="border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
                 >
                   <option value="MEDICAMENTO">Medicamento</option>
                   <option value="INSUMO">Insumo</option>
                   <option value="EQUIPO">Equipo</option>
                 </select>
-
                 <input
                   name="id_ubicacion"
-                  placeholder="ID Ubicación"
                   value={newItem.id_ubicacion}
-                  className="border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
+                  placeholder="Ubicación"
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
                 />
-
                 <input
                   name="unidad_medida"
-                  placeholder="Unidad de Medida"
                   value={newItem.unidad_medida}
-                  className="border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
+                  placeholder="Unidad"
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
                 />
-
                 <input
                   type="number"
                   name="stock_minimo"
-                  placeholder="Stock Mínimo"
                   value={newItem.stock_minimo}
-                  className="border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
+                  placeholder="Stock mínimo"
+                  className="border px-4 py-3 rounded-lg"
                   onChange={handleChange}
                 />
               </div>
@@ -193,14 +837,14 @@ export default function Inventarios() {
               <div className="flex justify-end gap-3">
                 <button
                   onClick={closeModal}
-                  className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition font-semibold"
+                  className="px-6 py-3 bg-gray-200 rounded-lg"
                 >
                   Cancelar
                 </button>
 
                 <button
                   onClick={submitNewItem}
-                  className="px-6 py-3 bg-[#08988e] text-white rounded-lg hover:bg-[#067a6f] transition font-semibold"
+                  className="px-6 py-3 bg-[#08988e] text-white rounded-lg hover:bg-[#067a6f]"
                 >
                   Guardar Lote
                 </button>
@@ -209,124 +853,84 @@ export default function Inventarios() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover:shadow-md transition-shadow">
-            <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">Total de Lotes</p>
-            <p className="text-4xl font-bold text-blue-800 mt-3">{totalItems}</p>
-            <p className="text-blue-600 text-xs mt-2">Productos en sistema</p>
-          </div>
+        {/* MODAL EDITAR ITEM */}
+        {showEditModal && editItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-xl">
+              <h2 className="text-2xl font-bold mb-6">Editar Lote</h2>
 
-          <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200 hover:shadow-md transition-shadow">
-            <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Stock Mínimo Total</p>
-            <p className="text-4xl font-bold text-green-800 mt-3">{totalStockMinimo}</p>
-            <p className="text-green-600 text-xs mt-2">Unidades requeridas</p>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <input
+                  name="codigo"
+                  value={editItem.codigo}
+                  onChange={handleEditChange}
+                  placeholder="Código"
+                  className="border px-4 py-3 rounded-lg"
+                />
 
-          <div className="bg-gradient-to-br from-[#08988e] to-[#067a6f] p-6 rounded-xl border border-[#067a6f] hover:shadow-md transition-shadow">
-            <p className="text-white text-sm font-semibold uppercase tracking-wide">Estado Sistema</p>
-            <p className="text-4xl font-bold text-white mt-3">✓</p>
-            <p className="text-gray-100 text-xs mt-2">Activo y operativo</p>
-          </div>
-        </div>
+                <input
+                  name="descripcion"
+                  value={editItem.descripcion}
+                  onChange={handleEditChange}
+                  placeholder="Descripción"
+                  className="border px-4 py-3 rounded-lg"
+                />
 
-        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Filtros y Búsqueda</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Buscar por nombre o código</label>
-              <input
-                type="text"
-                placeholder="Escribir aquí..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+                <select
+                  name="tipo_item"
+                  value={editItem.tipo_item}
+                  onChange={handleEditChange}
+                  className="border px-4 py-3 rounded-lg"
+                >
+                  <option value="MEDICAMENTO">Medicamento</option>
+                  <option value="INSUMO">Insumo</option>
+                  <option value="EQUIPO">Equipo</option>
+                </select>
+
+                <input
+                  name="id_ubicacion"
+                  value={editItem.id_ubicacion}
+                  onChange={handleEditChange}
+                  placeholder="Ubicación"
+                  className="border px-4 py-3 rounded-lg"
+                />
+
+                <input
+                  name="unidad_medida"
+                  value={editItem.unidad_medida}
+                  onChange={handleEditChange}
+                  placeholder="Unidad"
+                  className="border px-4 py-3 rounded-lg"
+                />
+
+                <input
+                  type="number"
+                  name="stock_minimo"
+                  value={editItem.stock_minimo}
+                  onChange={handleEditChange}
+                  placeholder="Stock mínimo"
+                  className="border px-4 py-3 rounded-lg"
+                />
+              </div>
+
+              <div className="flex justify-end mt-6 gap-3">
+                <button
+                  onClick={closeEditModal}
+                  className="px-6 py-3 bg-gray-200 rounded-lg"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={submitUpdateItem}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Producto</label>
-              <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
-                onChange={(e) => setFilterTipo(e.target.value)}
-              >
-                <option value="todos">Todos los tipos</option>
-                <option value="MEDICAMENTO">Medicamentos</option>
-                <option value="INSUMO">Insumos</option>
-                <option value="EQUIPO">Equipos</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Ordenar por</label>
-              <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#08988e] focus:border-transparent outline-none transition"
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="nombre">Nombre</option>
-                <option value="codigo">Código</option>
-              </select>
-            </div>
           </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-[#08988e] to-[#067a6f] text-white">
-                  <th className="px-6 py-4 text-left text-sm font-semibold">ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Código</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Descripción</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Tipo</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">U. Medida</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Stock Mínimo</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Ubicación</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-200">
-                {filteredData.map((item, index) => (
-                  <tr
-                    key={item.id_item}
-                    className="hover:bg-gray-50 transition-colors duration-200"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">#{item.id_item}</td>
-                    <td className="px-6 py-4 text-sm font-mono text-gray-600 bg-gray-50">{item.codigo}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.descripcion}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`${getTypeBadge(item.tipo_item)} px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 w-fit`}
-                      >
-                        {getTypeIcon(item.tipo_item)} {item.tipo_item}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.unidad_medida}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-semibold">
-                        {item.stock_minimo}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.id_ubicacion || "N/A"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {filteredData.length === 0 && (
-            <div className="p-8 text-center">
-              <p className="text-gray-500 text-lg">No se encontraron lotes que coincidan con los filtros.</p>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 flex justify-between items-center text-sm text-gray-600">
-          <p>
-            Mostrando <span className="font-semibold text-gray-900">{filteredData.length}</span> de{" "}
-            <span className="font-semibold text-gray-900">{items.length}</span> lotes
-          </p>
-          <p className="text-xs text-gray-500">Última actualización: {new Date().toLocaleTimeString()}</p>
-        </div>
+        )}
       </div>
     </div>
   )

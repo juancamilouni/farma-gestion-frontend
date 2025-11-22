@@ -11,6 +11,7 @@ export default function Lotes() {
   const [search, setSearch] = useState("");
   const [estadoFilter, setEstadoFilter] = useState("TODOS");
 
+
   // PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -28,22 +29,12 @@ export default function Lotes() {
     id_ubicacion_destino: "",
     cantidad: 0,
     id_usuario: 1,
-    motivo: "Ingreso inicial de inventario",
+    motivo: "Ingreso inicial de inventario"
   });
 
   // MODAL EDITAR
   const [showEdit, setShowEdit] = useState(false);
   const [editLote, setEditLote] = useState(null);
-
-  // MODAL TRANSFERIR
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [transferData, setTransferData] = useState({
-    id_item: "",
-    id_ubicacion: "",
-  });
-
-  // NOTIFICACIÓN
-  const [message, setMessage] = useState(null);
 
   // Cargar datos
   useEffect(() => {
@@ -81,7 +72,7 @@ export default function Lotes() {
   const currentData = filtered.slice(indexFirst, indexLast);
   const totalPages = Math.ceil(filtered.length / perPage);
 
-  // Crear Lote (SIN CAMBIOS)
+  // Crear Lote
   const crearLote = async () => {
     try {
       const payload = {
@@ -95,7 +86,7 @@ export default function Lotes() {
         id_ubicacion_destino: Number(newLote.id_ubicacion_destino),
         cantidad: Number(newLote.cantidad),
         id_usuario: 1,
-        motivo: newLote.motivo,
+        motivo: newLote.motivo
       };
 
       await api.post("/lotes", payload);
@@ -107,12 +98,12 @@ export default function Lotes() {
     }
   };
 
-  // Editar lote (SIN CAMBIOS)
+  // Editar lote
   const guardarEdicion = async () => {
     try {
       await api.put(`/lotes/${editLote.id_lote}`, {
         fecha_vencimiento: editLote.fecha_vencimiento,
-        costo_unitario: Number(editLote.costo_unitario),
+        costo_unitario: Number(editLote.costo_unitario)
       });
 
       setShowEdit(false);
@@ -120,26 +111,6 @@ export default function Lotes() {
     } catch (e) {
       console.error("Error actualizando lote:", e);
       alert("Error actualizando lote");
-    }
-  };
-
-  // Transferir stock (TOMADO DE LA OTRA PLANTILLA)
-  const transferirStock = async () => {
-    try {
-      const payload = { id_ubicacion: Number(transferData.id_ubicacion) };
-
-      await api.put(`/items/change-location/${transferData.id_item}`, payload);
-
-      setShowTransfer(false);
-      setMessage("Transferencia realizada correctamente");
-
-      setTimeout(() => {
-        setMessage(null);
-        window.location.reload();
-      }, 1500);
-    } catch (error) {
-      console.error("Error transfiriendo:", error);
-      setMessage("Error realizando la transferencia");
     }
   };
 
@@ -156,14 +127,8 @@ export default function Lotes() {
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
-      {/* NOTIFICACIÓN DE TRANSFERENCIA */}
-      {message && (
-        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in-out">
-          {message}
-        </div>
-      )}
-
       <div className="bg-white rounded-xl shadow p-6">
+
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <h1 className="text-3xl font-bold text-[#08988e]">Gestión de Lotes</h1>
@@ -235,8 +200,7 @@ export default function Lotes() {
                   <td className="px-4 py-2">${l.costo_unitario}</td>
                   <td className="px-4 py-2">{l.estado}</td>
 
-                  <td className="px-4 py-2 flex gap-2">
-                    {/* EDITAR */}
+                  <td className="px-4 py-2">
                     <button
                       className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
                       onClick={() => {
@@ -246,24 +210,11 @@ export default function Lotes() {
                     >
                       Editar
                     </button>
-
-                    {/* TRANSFERIR */}
-                    <button
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg"
-                      onClick={() => {
-                        setTransferData({
-                          id_item: l.id_item,
-                          id_ubicacion: "",
-                        });
-                        setShowTransfer(true);
-                      }}
-                    >
-                      Transferir
-                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
+
           </table>
         </div>
 
@@ -277,9 +228,7 @@ export default function Lotes() {
             ← Anterior
           </button>
 
-          <span>
-            Página {currentPage} de {totalPages}
-          </span>
+          <span>Página {currentPage} de {totalPages}</span>
 
           <button
             disabled={currentPage === totalPages}
@@ -289,15 +238,18 @@ export default function Lotes() {
             Siguiente →
           </button>
         </div>
+
       </div>
 
       {/* MODAL CREAR */}
       {showCreate && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
           <div className="bg-white p-8 rounded-lg w-full max-w-xl">
+
             <h2 className="text-xl font-bold mb-4">Crear Lote</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
               <input
                 type="text"
                 className="border px-4 py-2 rounded-lg w-full"
@@ -353,10 +305,7 @@ export default function Lotes() {
                 className="border px-4 py-2 rounded-lg w-full"
                 value={newLote.fecha_vencimiento}
                 onChange={(e) =>
-                  setNewLote({
-                    ...newLote,
-                    fecha_vencimiento: e.target.value,
-                  })
+                  setNewLote({ ...newLote, fecha_vencimiento: e.target.value })
                 }
               />
 
@@ -378,7 +327,7 @@ export default function Lotes() {
                 onChange={(e) =>
                   setNewLote({
                     ...newLote,
-                    id_ubicacion_destino: e.target.value,
+                    id_ubicacion_destino: e.target.value
                   })
                 }
               />
@@ -392,6 +341,7 @@ export default function Lotes() {
                   setNewLote({ ...newLote, cantidad: e.target.value })
                 }
               />
+
             </div>
 
             <textarea
@@ -418,6 +368,7 @@ export default function Lotes() {
                 Crear Lote
               </button>
             </div>
+
           </div>
         </div>
       )}
@@ -426,6 +377,7 @@ export default function Lotes() {
       {showEdit && editLote && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
           <div className="bg-white p-8 rounded-lg w-full max-w-md">
+
             <h2 className="text-xl font-bold mb-4">Editar Lote</h2>
 
             <label className="block mb-3">Fecha de Vencimiento</label>
@@ -434,10 +386,7 @@ export default function Lotes() {
               className="border px-4 py-2 rounded-lg w-full mb-4"
               value={editLote.fecha_vencimiento}
               onChange={(e) =>
-                setEditLote({
-                  ...editLote,
-                  fecha_vencimiento: e.target.value,
-                })
+                setEditLote({ ...editLote, fecha_vencimiento: e.target.value })
               }
             />
 
@@ -447,10 +396,7 @@ export default function Lotes() {
               className="border px-4 py-2 rounded-lg w-full mb-4"
               value={editLote.costo_unitario}
               onChange={(e) =>
-                setEditLote({
-                  ...editLote,
-                  costo_unitario: e.target.value,
-                })
+                setEditLote({ ...editLote, costo_unitario: e.target.value })
               }
             />
 
@@ -469,48 +415,12 @@ export default function Lotes() {
                 Guardar
               </button>
             </div>
+
           </div>
         </div>
+
       )}
 
-      {/* MODAL TRANSFERIR */}
-      {showTransfer && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="bg-white p-8 rounded-lg w-full max-w-xl">
-            <h2 className="text-xl font-bold mb-6">Transferir Stock</h2>
-
-            <label className="block mb-2">Nueva ubicación</label>
-            <input
-              type="number"
-              className="border px-4 py-2 rounded-lg w-full mb-4"
-              placeholder="ID nueva ubicación"
-              value={transferData.id_ubicacion}
-              onChange={(e) =>
-                setTransferData({
-                  ...transferData,
-                  id_ubicacion: e.target.value,
-                })
-              }
-            />
-
-            <div className="flex justify-end gap-3 mt-4">
-              <button
-                className="px-4 py-2 bg-gray-300 rounded-lg"
-                onClick={() => setShowTransfer(false)}
-              >
-                Cancelar
-              </button>
-
-              <button
-                className="px-4 py-2 bg-green-600 text-white rounded-lg"
-                onClick={transferirStock}
-              >
-                Transferir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
